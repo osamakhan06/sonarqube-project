@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page Tracker Dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 0; background: #f4f5f7; color: #222; }
+  header { background: #1f2937; color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  header h1 { margin: 0; font-size: 20px; }
+  nav button { background: transparent; color: #cbd5e1; border: 0; padding: 8px 14px; cursor: pointer; font-size: 14px; border-radius: 6px; }
+  nav button.active { background: #2563eb; color: #fff; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.1); font-size: 13px; color: #555; }
+  .card b { display: block; font-size: 26px; color: #111; margin-top: 4px; }
+  .panel { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); margin-bottom: 20px; }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; }
+  .chart { display: flex; align-items: flex-end; gap: 10px; height: 160px; padding-top: 10px; }
+  .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bar { width: 100%; background: #2563eb; border-radius: 4px 4px 0 0; min-height: 2px; position: relative; }
+  .bar-val { font-size: 12px; margin-bottom: 3px; }
+  .bar-label { font-size: 11px; color: #666; margin-top: 4px; }
+  .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #f1f5f9; }
+  .scroll-box { overflow-x: auto; }
+  .btn { padding: 8px 14px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; margin-right: 8px; }
+  .btn.red { background: #dc2626; }
+  .filler { height: 500px; background: linear-gradient(#dbeafe, #fce7f3); border-radius: 8px; padding: 12px; margin-top: 16px; }
+  .muted { color: #777; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Page Tracker</h1>
+  <nav>
+    <button id="tab-page" class="active">Tracked Page</button>
+    <button id="tab-dash">Dashboard</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- TRACKED PAGE -->
+  <section id="view-page" class="view active">
+    <div class="panel">
+      <h2>Welcome</h2>
+      <p>This is the page being tracked. Every time you open this file, a visit is recorded. Scroll, click around and stay a while, then check the Dashboard tab.</p>
+      <button class="btn" id="testBtn">Test button</button>
+      <button class="btn" id="testBtn2">Another button</button>
+    </div>
+    <div class="filler">Scroll down to test scroll tracking…</div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="view-dash" class="view">
+    <div class="cards">
+      <div class="card">Total views<b id="d-views">0</b></div>
+      <div class="card">Avg. time on page<b id="d-avgtime">0s</b></div>
+      <div class="card">Avg. scroll depth<b id="d-avgscroll">0%</b></div>
+      <div class="card">Total clicks<b id="d-clicks">0</b></div>
+    </div>
+
+    <div class="panel">
+      <h2>Views – last 7 days</h2>
+      <div class="chart" id="chart"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Top referrers</h2>
+      <div id="referrers"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Recent visits</h2>
+      <div class="scroll-box">
+        <table>
+          <thead><tr><th>#</th><th>Date / time</th><th>Duration</th><th>Scroll</th><th>Clicks</th><th>Referrer</th></tr></thead>
+          <tbody id="log"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="btn" id="exportBtn">Export CSV</button>
+    <button class="btn red" id="clearBtn">Clear all data</button>
+    <p class="muted">Data is stored in this browser only (localStorage).</p>
+  </section>
+
+</main>
+
+<script>
+(function () {
+  var KEY = "pageTrackerVisits";
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; }
+  }
+  function save(d) {
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
+  }
+
+  /* ---------- Tracking ---------- */
+  var visits = load();
+  var start = Date.now();
+  var visit = {
+    ts: start,
+    date: new Date().toLocaleString(),
+    duration: 0,
+    scroll: 0,
+    clicks: 0,
+    referrer: document.referrer || "direct"
+  };
+  visits.push(visit);
+  save(visits);
+
+  function persist() {
+    visit.duration = Math.round((Date.now() - start) / 1000);
+    save(visits);
+  }
+
+  window.addEventListener("scroll", function () {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    var pct = max > 0 ? Math.round((h.scrollTop / max) * 100) : 100;
+    if (pct > visit.scroll) { visit.scroll = pct; persist(); }
+  });
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("nav") || e.target.id === "clearBtn" || e.target.id === "exportBtn") return;
+    visit.clicks++;
+    persist();
+  });
+
+  window.addEventListener("beforeunload", persist);
+
+  /* ---------- Tabs ---------- */
+  var tabPage = document.getElementById("tab-page");
+  var tabDash = document.getElementById("tab-dash");
+  var viewPage = document.getElementById("view-page");
+  var viewDash = document.getElementById("view-dash");
+
+  function show(which) {
+    var dash = which === "dash";
+    tabDash.classList.toggle("active", dash);
+    tabPage.classList.toggle("active", !dash);
+    viewDash.classList.toggle("active", dash);
+    viewPage.classList.toggle("active", !dash);
+    if (dash) render();
+  }
+  tabPage.onclick = function () { show("page"); };
+  tabDash.onclick = function () { show("dash"); };
+
+  /* ---------- Dashboard ---------- */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  function render() {
+    var n = visits.length;
+    var totalTime = 0, totalScroll = 0, totalClicks = 0;
+    visits.forEach(function (v) {
+      totalTime += v.duration || 0;
+      totalScroll += v.scroll || 0;
+      totalClicks += v.clicks || 0;
+    });
+
+    $("d-views").textContent = n;
+    $("d-avgtime").textContent = (n ? Math.round(totalTime / n) : 0) + "s";
+    $("d-avgscroll").textContent = (n ? Math.round(totalScroll / n) : 0) + "%";
+    $("d-clicks").textContent = totalClicks;
+
+    // Last 7 days chart
+    var days = [];
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      days.push({ start: d.getTime(), label: d.toLocaleDateString(undefined, { weekday: "short" }), count: 0 });
+    }
+    visits.forEach(function (v) {
+      var t = v.ts || Date.parse(v.date) || 0;
+      days.forEach(function (day) {
+        if (t >= day.start && t < day.start + 86400000) day.count++;
+      });
+    });
+    var max = Math.max.apply(null, days.map(function (d) { return d.count; }).concat([1]));
+    $("chart").innerHTML = days.map(function (d) {
+      var h = Math.round((d.count / max) * 100);
+      return '<div class="bar-wrap"><div class="bar-val">' + d.count + '</div>' +
+             '<div class="bar" style="height:' + h + '%"></div>' +
+             '<div class="bar-label">' + d.label + '</div></div>';
+    }).join("");
+
+    // Referrers
+    var refs = {};
+    visits.forEach(function (v) { refs[v.referrer] = (refs[v.referrer] || 0) + 1; });
+    var refList = Object.keys(refs).sort(function (a, b) { return refs[b] - refs[a]; }).slice(0, 5);
+    $("referrers").innerHTML = refList.length
+      ? refList.map(function (r) { return '<div class="row"><span>' + esc(r) + '</span><b>' + refs[r] + '</b></div>'; }).join("")
+      : '<p class="muted">No data yet.</p>';
+
+    // Recent visits
+    $("log").innerHTML = visits.slice().reverse().slice(0, 20).map(function (v, i) {
+      return "<tr><td>" + (n - i) + "</td><td>" + esc(v.date) + "</td><td>" + (v.duration || 0) +
+             "s</td><td>" + (v.scroll || 0) + "%</td><td>" + (v.clicks || 0) + "</td><td>" + esc(v.referrer) + "</td></tr>";
+    }).join("");
+  }
+
+  // Live refresh
+  setInterval(function () {
+    persist();
+    if (viewDash.classList.contains("active")) render();
+  }, 1000);
+
+  // Export CSV
+  $("exportBtn").onclick = function () {
+    var rows = [["date", "duration_s", "scroll_pct", "clicks", "referrer"]];
+    visits.forEach(function (v) { rows.push([v.date, v.duration, v.scroll, v.clicks, v.referrer]); });
+    var csv = rows.map(function (r) {
+      return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(",");
+    }).join("\n");
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "page-tracker.csv";
+    a.click();
+  };
+
+  // Clear data
+  $("clearBtn").onclick = function () {
+    if (!confirm("Delete all tracking data?")) return;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    visit.clicks = 0;
+    visits = [visit];
+    save(visits);
+    render();
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
