@@ -1,6 +1,6 @@
 
 FROM nginx:alpine
 
-COPY index.html /usr/share/nginx/html/index.html
+COPY page-tracker-dashboard/index.html /usr/share/nginx/html/index.html
 
 EXPOSE 80
